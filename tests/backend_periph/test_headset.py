@@ -52,7 +52,9 @@ def test_refresh_full(qtbot):
     settle(c)
     s = spy[0][0]
     assert (s.present, s.connected, s.battery_pct, s.charging) == (True, True, 87, False)
-    assert (s.light_effect, s.light_brightness, s.light_rgb, s.software_led) == (1, 50, (234, 178, 21), True)
+    # the LEDs hold linearised colours: the raw EA B2 15 read from the device is shown decoded
+    assert (s.light_effect, s.light_brightness, s.software_led) == (1, 50, True)
+    assert s.light_rgb == Hs.led_decode((0xEA, 0xB2, 0x15))
     assert s.firmware == "4.0.5.0 / 4.0.5.0" and tr.sent() == []
 
 
@@ -76,9 +78,10 @@ def test_set_lighting_sequence(qtbot):
     c.refresh()
     settle(c)
     tr.log.clear()
-    c.set_lighting(2, 70, (1, 2, 3))
+    c.set_lighting(2, 70, (0xFF, 0x5A, 0x5F))
     settle(c)
-    assert tr.sent() == [bytes.fromhex("5110000000"), bytes.fromhex("512800000246010203")]
+    # colour linearised like the mouse/keyboard: #FF5A5F -> FF 1A 1D
+    assert tr.sent() == [bytes.fromhex("5110000000"), bytes.fromhex("512800000246ff1a1d")]
     assert tr.log[0][0] == "send" and tr.log[1][0] == "send"
     assert tr.requested()[0] == b"\x12\x03"
 
@@ -116,3 +119,18 @@ def test_invalid_lighting_emits_error(qtbot):
     c.set_lighting(9, 10, (0, 0, 0))
     settle(c)
     assert len(errs) == 1 and tr.log == []
+
+
+def test_lighting_colour_we_wrote_reads_back_exactly(qtbot):
+    # a dark colour is lossy through the decode, but a colour WE wrote reads back exactly
+    tr = FakeTransport(replies())
+    c = client_with(tr)
+    c.refresh()
+    settle(c)
+    c.set_lighting(1, 50, (10, 20, 30))
+    settle(c)
+    raw = Hs.led_encode((10, 20, 30))
+    tr.replies[b"\x12\x03"] = rep(R, "12 03 00 00 01 32" + bytes(raw).hex())
+    c.refresh()
+    settle(c)
+    assert c.state().light_rgb == (10, 20, 30)

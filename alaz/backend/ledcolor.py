@@ -1,4 +1,4 @@
-"""sRGB <-> linear conversion for RGB LEDs (ROG mouse, laptop keyboard).
+"""sRGB <-> linear conversion for RGB LEDs (ROG mouse, laptop keyboard, Pelta headset).
 
 LEDs drive their PWM linearly while UI colours are sRGB (gamma-encoded). Sent raw, mixed colours wash out
 or shift: VERIFIED visually by the owner on the Harpe Ace Mini (#FF5A5F looked pink; FF 1A 1D matched) and on

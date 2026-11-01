@@ -10,6 +10,7 @@ from typing import Callable
 
 from PyQt6.QtCore import QObject
 
+from ..ledcolor import led_decode, led_encode  # LED colours are linearised (see ledcolor.py)
 from .hidraw import HidClientBase, HidTransport, is_error_reply, pad
 
 log = logging.getLogger(__name__)
@@ -95,6 +96,7 @@ class HeadsetClient(HidClientBase):
     def __init__(self, parent: QObject | None = None, *, finder=None,
                  transport_factory: Callable[[str], HidTransport] | None = None):
         super().__init__(parent, finder=finder, transport_factory=transport_factory)
+        self._light_written: dict[tuple, tuple] = {}   # raw LED value -> sRGB colour we wrote (worker thread)
 
     def _fresh_state(self, present: bool, permission: bool) -> HeadsetState:
         return HeadsetState(present=present, permission=permission)
@@ -106,6 +108,9 @@ class HeadsetClient(HidClientBase):
             if r is None or is_error_reply(r):
                 continue
             for key, val in parser(r).items():
+                if key == "light_rgb":
+                    # exact colour if we wrote it (the decode is lossy for dark channels), else decoded
+                    val = self._light_written.get(val) or led_decode(val)
                 setattr(self._state, key, val)
 
     def _read_all(self) -> None:
@@ -119,11 +124,16 @@ class HeadsetClient(HidClientBase):
         self._read_blocks("firmware", "power", "charging", "lighting", "swmode")
 
     def set_lighting(self, effect: int, brightness: int, rgb) -> None:
+        """``rgb`` is the UI (sRGB) colour; it is linearised for the LEDs like the mouse and keyboard."""
         try:
-            cmd = build_lighting(effect, brightness, rgb)
+            build_lighting(effect, brightness, rgb)   # validate the UI colour eagerly
+            rgb_t = tuple(int(c) for c in rgb)
+            raw = led_encode(rgb_t)
+            cmd = build_lighting(effect, brightness, raw)
         except ValueError as exc:
             self.error.emit(str(exc))
             return
+        self._light_written[raw] = rgb_t
 
         def job():
             if not self._ensure():

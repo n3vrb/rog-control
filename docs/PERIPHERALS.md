@@ -113,4 +113,6 @@ GamePlus E3/E4/EA, EE, KVM F3.
 The LED is driven linearly; UI colours are sRGB. Sent raw, mixed colours wash out (#FF5A5F showed pink). The
 backend linearises every LED colour before writing (`led_encode`, #FF5A5F → FF 1A 1D) and converts reads back
 (`led_decode`; colours Alaz wrote are remembered so they read back exactly). DPI-stage indicator colours are
-sent raw (not verified). Pelta lighting is sent raw (the owner saw no colour issue there).
+sent raw (not verified). The same linearisation (`alaz/backend/ledcolor.py`) is applied to the laptop keyboard
+(VERIFIED visually: #FFD84D looked greenish raw, FF AF 13 matched) and to the Pelta lighting (owner's request, so
+Aura Sync looks the same on every device).
